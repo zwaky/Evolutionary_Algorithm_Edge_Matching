@@ -9,18 +9,6 @@ NUMBER_OF_GENERATIONS = 50
 CANDIDATE_SOLUTIONS = []
 
 # Function to rotate a tile based on the orientation
-def rotate_tile(tile, orientation):
-    if orientation == 0:
-        return tile  # No rotation
-    elif orientation == 1:
-        # Rotate 90 degrees
-        return [tile[3], tile[0], tile[1], tile[2]]  # [left, top, right, bottom]
-    elif orientation == 2:
-        # Rotate 180 degrees
-        return [tile[2], tile[3], tile[0], tile[1]]  # [bottom, left, top, right]
-    elif orientation == 3:
-        # Rotate 270 degrees
-        return [tile[1], tile[2], tile[3], tile[0]]  # [right, bottom, left, top]
 def initialize_candidate_solutions():
     tiles_temp = []
     candidate_solution = [[] for _ in range(POPULATION_SIZE)]
@@ -115,9 +103,30 @@ def generate_candidate_solution():
     # Return the solution and its fitness as a tuple
     return (candidate_solution, fitness)
 
+def insert_candidate(candidate):
+    # Insert new_individual into already sorted candidate_solutions in the correct position
+    index = bisect.bisect_left(
+        [fitness[1] for fitness in CANDIDATE_SOLUTIONS],  # Extract all fitnesses
+        candidate[1]                                      #candidate's fitness
+    )
+    CANDIDATE_SOLUTIONS.insert(index, candidate)
+
+    return index
+def rotate_tile(tile, orientation):
+    if orientation == 0:
+        return tile  # No rotation
+    elif orientation == 1:
+        # Rotate 90 degrees
+        return [tile[3], tile[0], tile[1], tile[2]]  # [left, top, right, bottom]
+    elif orientation == 2:
+        # Rotate 180 degrees
+        return [tile[2], tile[3], tile[0], tile[1]]  # [bottom, left, top, right]
+    elif orientation == 3:
+        # Rotate 270 degrees
+        return [tile[1], tile[2], tile[3], tile[0]]  # [right, bottom, left, top]
+
 def fitness_test(candidate_solution):
     mismatches = 0
-
 
     # Iterate over each tile in the 8x8 grid
     for row in range(GRID):
@@ -183,16 +192,6 @@ def get_fitness(individual):
 
 def get_tiles(individual):
     return(individual[0])
-
-def insert_candidate(candidate):
-    # Insert new_individual into already sorted candidate_solutions in the correct position
-    index = bisect.bisect_left(
-        [fitness[1] for fitness in CANDIDATE_SOLUTIONS],  # Extract all fitnesses
-        candidate[1]                                      #candidate's fitness
-    )
-    CANDIDATE_SOLUTIONS.insert(index, candidate)
-
-    return index
 
 def main():
     #Solutions are population-long list of (candidate[64] , fitness <-already sorted)
