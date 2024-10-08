@@ -302,7 +302,7 @@ def generation(candidate_solutions, generations):
 
         # Create offsprings
         offspring = []
-        for i in range (0,10):
+        for i in range (0,3):
             offspring.append(crossover(parent[i], parent[i+1]))
             offspring.append(mutation(parent[i]))
 
@@ -325,7 +325,7 @@ def generation(candidate_solutions, generations):
 
         # Save current generation into array
         fitness_data.append((current_generation, new_generation[0][1]))
-        diversity_data.append(average_permutation_diversity(new_generation))
+        diversity_data.append((current_generation, average_permutation_diversity(new_generation)))
 
     # Save all fitnesses into file at the end of generation cycle
     save_fitness_curve()
@@ -411,7 +411,7 @@ def save_fitness_curve(filename="fitness_curve.txt"):
 def save_diversity_curve(filename="diversity_curve.txt"):
     """Save the diversity data to a file after all generations are done."""
     with open(filename, "w") as file:
-        for generation, diversity in fitness_data:
+        for generation, diversity in diversity_data:
             file.write(f"{generation} {diversity}\n")
 
 def plot_fitness_curve():
@@ -445,10 +445,10 @@ def plot_diversity_curve():
     # Open the fitness_curve.txt file and read the data
     with open("diversity_curve.txt", "r") as file:
         for line in file:
-            # Split each line by spaces and extract generation and fitness
-            generation, fitness = map(int, line.split())
-            generations.append(generation)
-            diversity.append(fitness)
+            # Split each line by spaces and extract generation and diversity
+            generation, div_value = line.split()
+            generations.append(int(generation))  # Convert generation to int
+            diversity.append(float(div_value))   # Convert diversity to float
 
     # Plot the fitness over generations
     plt.figure(figsize=(10, 6))
@@ -483,6 +483,7 @@ def main():
     candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
     plot_diversity_curve()
+    plot_fitness_curve()
 
 
 # This block ensures the main function is only executed when the script is run directly
