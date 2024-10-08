@@ -7,20 +7,21 @@ from matplotlib import pyplot as plt
 PUZZLE_SIZE = 64
 GRID = 8
 
-POPULATION_SIZE = 500
-NUMBER_OF_GENERATIONS = 1000
+POPULATION_SIZE = 100
+NUMBER_OF_GENERATIONS = 100
 
 GENERATION_GAP = 1  # proportion of the population replaced
 
-TOURNAMENT_SAMPLE_SIZE = 3
+TOURNAMENT_SAMPLE_SIZE = 10
 
 MUTATION_MOVE_PROBABILITY = 1
 MUTATION_ROTATE_PROBABILITY = 1
 
 ROUND_ROBIN_TOURNAMENT_SIZE = 10
 
-# List to hold (generation, fitness) pairs
+# Lists to hold information until program ends
 fitness_data = []
+diversity_data = []
 
 
 # Function to rotate a tile based on the orientation
@@ -282,6 +283,7 @@ def round_robin(candidate_solutions):
 
     return round_robin_sorted
 
+
 def generation(candidate_solutions, generations):
     # Go through several generations. Returns the whole population at the end
     new_generation = candidate_solutions
@@ -291,7 +293,6 @@ def generation(candidate_solutions, generations):
 
         new_generation = []
         old_generation = candidate_solutions
-
 
         # Select parents
         parent = []
@@ -323,11 +324,28 @@ def generation(candidate_solutions, generations):
 
         # Save current generation into array
         fitness_data.append((current_generation, new_generation[0][1]))
+        diversity_data.append(average_permutation_diversity(new_generation))
 
     # Save all fitnesses into file at the end of generation cycle
     save_fitness_curve()
+    save_diversity_curve()
+
 
     return new_generation
+
+
+def permutation_distance(candidate_1, candidate_2):
+    return sum(c1 != c2 for c1, c2 in zip(candidate_1[0], candidate_2[0]))
+
+def average_permutation_diversity(candidate_solutions):
+    total_distance = 0
+    count = 0
+    for i in range(len(candidate_solutions)):
+        for j in range(i + 1, len(candidate_solutions)):
+            total_distance += permutation_distance(candidate_solutions[i], candidate_solutions[j])
+            count += 1
+    return total_distance / count if count > 0 else 0
+
 
 def print_gui(candidate_solution_tuple):
     candidate_solution = candidate_solution_tuple[0]
@@ -352,6 +370,7 @@ def print_gui(candidate_solution_tuple):
     # Start the Tkinter main loop to display the window
     window.mainloop()
 
+
 def print_fitness(candidate_solutions):
     fitnesses = []
 
@@ -360,12 +379,13 @@ def print_fitness(candidate_solutions):
 
     print(fitnesses)
 
+
 def print_solutions(candidate_solutions):
     for candidate in candidate_solutions:
         print(candidate)
 
-def save_individual(candidate_solution):
 
+def save_individual(candidate_solution):
     tiles = candidate_solution[0]
     fitness = candidate_solution[1]
 
@@ -377,14 +397,21 @@ def save_individual(candidate_solution):
         # Write the 64 tiles, 8 tiles per row
         for i in range(0, 64, 8):
             # Join 8 tiles (each a list of 4 digits) into a string of 4-digit numbers
-            row = " ".join("".join(map(str, tile)) for tile in tiles[i:i+8])
+            row = " ".join("".join(map(str, tile)) for tile in tiles[i:i + 8])
             file.write(f"{row}\n")
+
 
 def save_fitness_curve(filename="fitness_curve.txt"):
     """Save the fitness data to a file after all generations are done."""
     with open(filename, "w") as file:
         for generation, fitness in fitness_data:
             file.write(f"{generation} {fitness}\n")
+
+def save_diversity_curve(filename="diversity_curve.txt"):
+    """Save the diversity data to a file after all generations are done."""
+    with open(filename, "w") as file:
+        for generation, diversity in fitness_data:
+            file.write(f"{generation} {diversity}\n")
 
 def plot_fitness_curve():
     generations = []
@@ -407,6 +434,29 @@ def plot_fitness_curve():
     plt.grid(True)
     plt.savefig('fitness over generations.png')
 
+    # Display the plot
+    plt.show()
+
+def plot_diversity_curve():
+    generations = []
+    diversity = []
+
+    # Open the fitness_curve.txt file and read the data
+    with open("diversity_curve.txt", "r") as file:
+        for line in file:
+            # Split each line by spaces and extract generation and fitness
+            generation, fitness = map(int, line.split())
+            generations.append(generation)
+            diversity.append(fitness)
+
+    # Plot the fitness over generations
+    plt.figure(figsize=(10, 6))
+    plt.plot(generations, diversity, linestyle='-', color='b')
+    plt.title('Diversity Over Generations')
+    plt.xlabel('Generation')
+    plt.ylabel('Average Diversity')
+    plt.grid(True)
+    plt.savefig('diversity over generations.png')
 
     # Display the plot
     plt.show()
@@ -414,13 +464,12 @@ def plot_fitness_curve():
 def get_fitness(individual):
     return (individual[1])
 
+
 def get_tiles(individual):
     return (individual[0])
 
 
-
 def main():
-
     # Solutions is sorted population-long list of (candidate[64] , fitness)
     # Edge:          candidate_solutions[1][0][1][3]
     # Single Tile:   candidate_solutions[x][0][63]
@@ -428,18 +477,11 @@ def main():
     # Fitness        candidate_solutions[x][1]
     candidate_solutions = initialize()
 
-    print_fitness(candidate_solutions)
+    average_permutation_diversity(candidate_solutions)
 
     candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
-    print_fitness(candidate_solutions)
-
-    save_individual(candidate_solutions[0])
-
-    # print_gui(candidate_solutions[0])
-
-    plot_fitness_curve()
-
+    plot_diversity_curve()
 
 
 # This block ensures the main function is only executed when the script is run directly
