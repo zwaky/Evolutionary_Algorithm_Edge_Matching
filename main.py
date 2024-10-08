@@ -7,8 +7,8 @@ from matplotlib import pyplot as plt
 PUZZLE_SIZE = 64
 GRID = 8
 
-POPULATION_SIZE = 20
-NUMBER_OF_GENERATIONS = 100
+POPULATION_SIZE = 500
+NUMBER_OF_GENERATIONS = 1000
 
 GENERATION_GAP = 1  # proportion of the population replaced
 
@@ -18,6 +18,9 @@ MUTATION_MOVE_PROBABILITY = 1
 MUTATION_ROTATE_PROBABILITY = 1
 
 ROUND_ROBIN_TOURNAMENT_SIZE = 10
+
+# List to hold (generation, fitness) pairs
+fitness_data = []
 
 
 # Function to rotate a tile based on the orientation
@@ -318,8 +321,11 @@ def generation(candidate_solutions, generations):
         generations -= 1
         current_generation += 1
 
-        # Save current generation into file
-        append_fitness_curve(current_generation,new_generation[0][1])
+        # Save current generation into array
+        fitness_data.append((current_generation, new_generation[0][1]))
+
+    # Save all fitnesses into file at the end of generation cycle
+    save_fitness_curve()
 
     return new_generation
 
@@ -374,14 +380,11 @@ def save_individual(candidate_solution):
             row = " ".join("".join(map(str, tile)) for tile in tiles[i:i+8])
             file.write(f"{row}\n")
 
-def append_fitness_curve(generation, fitness):
-    # If generation is 1, open the file in write mode to clear it
-    mode = "w" if generation == 1 else "a"
-
-    # Open the file in the appropriate mode
-    with open("fitness_curve.txt", mode) as file:
-        # Append the generation and fitness values to the file
-        file.write(f"{generation} {fitness}\n")
+def save_fitness_curve(filename="fitness_curve.txt"):
+    """Save the fitness data to a file after all generations are done."""
+    with open(filename, "w") as file:
+        for generation, fitness in fitness_data:
+            file.write(f"{generation} {fitness}\n")
 
 def plot_fitness_curve():
     generations = []
