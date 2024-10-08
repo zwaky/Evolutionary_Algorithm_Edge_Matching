@@ -1,12 +1,14 @@
 import random
 import tkinter as tk
 import bisect
+import numpy as np
+from matplotlib import pyplot as plt
 
 PUZZLE_SIZE = 64
 GRID = 8
 
 POPULATION_SIZE = 20
-NUMBER_OF_GENERATIONS = 500
+NUMBER_OF_GENERATIONS = 100
 
 GENERATION_GAP = 1  # proportion of the population replaced
 
@@ -277,36 +279,48 @@ def round_robin(candidate_solutions):
 
     return round_robin_sorted
 
-def generation(candidate_solutions):
-    # A single generation cycle
-    # Reduce number of solutions through survivor selection
+def generation(candidate_solutions, generations):
+    # Go through several generations. Returns the whole population at the end
+    new_generation = candidate_solutions
+    current_generation = 0
+
+    while generations > 0:
+
+        new_generation = []
+        old_generation = candidate_solutions
 
 
-    # Select parents
-    parent = []
-    parent.append(selection_tournament(candidate_solutions))
-    parent.append(selection_tournament(candidate_solutions))
-    parent.append(selection_tournament(candidate_solutions))
+        # Select parents
+        parent = []
+        parent.append(selection_tournament(old_generation))
+        parent.append(selection_tournament(old_generation))
+        parent.append(selection_tournament(old_generation))
 
-    # Create offsprings
-    offspring = []
-    offspring.append(crossover(parent[0], parent[1]))
-    offspring.append(mutation(parent[2]))
+        # Create offsprings
+        offspring = []
+        offspring.append(crossover(parent[0], parent[1]))
+        offspring.append(mutation(parent[2]))
 
-    # Add offsprings to global population
-    for individual in offspring:
-        insert_candidate(individual, candidate_solutions)
+        # Add offsprings to global population
+        for individual in offspring:
+            insert_candidate(individual, old_generation)
 
-    # round_robin() returns a sorted list of the best performing indexes
-    roundrobin = round_robin(candidate_solutions)
+        # round_robin() returns a sorted list of the best performing indexes
+        roundrobin = round_robin(old_generation)
 
-    # Create new population with best roundrobin results
-    new_generation = []
+        # Create new population with best roundrobin results
+        for i in range(0, POPULATION_SIZE):
+            new_generation.append(old_generation[roundrobin[i]])
 
-    for i in range(0, POPULATION_SIZE):
-        new_generation.append(candidate_solutions[roundrobin[i]])
+        # Replace old generation
+        old_generation = new_generation
 
-    # Replace old generation
+        generations -= 1
+        current_generation += 1
+
+        # Save current generation into file
+        append_fitness_curve(current_generation,new_generation[0][1])
+
     return new_generation
 
 def print_gui(candidate_solution_tuple):
@@ -332,7 +346,6 @@ def print_gui(candidate_solution_tuple):
     # Start the Tkinter main loop to display the window
     window.mainloop()
 
-
 def print_fitness(candidate_solutions):
     fitnesses = []
 
@@ -341,18 +354,66 @@ def print_fitness(candidate_solutions):
 
     print(fitnesses)
 
-
 def print_solutions(candidate_solutions):
     for candidate in candidate_solutions:
         print(candidate)
 
+def save_individual(candidate_solution):
+
+    tiles = candidate_solution[0]
+    fitness = candidate_solution[1]
+
+    # Open the file for writing
+    with open("Ass1Output.txt", "w") as file:
+        # Write the fitness to the first line
+        file.write(f"Fitness = {fitness}\n")
+
+        # Write the 64 tiles, 8 tiles per row
+        for i in range(0, 64, 8):
+            # Join 8 tiles (each a list of 4 digits) into a string of 4-digit numbers
+            row = " ".join("".join(map(str, tile)) for tile in tiles[i:i+8])
+            file.write(f"{row}\n")
+
+def append_fitness_curve(generation, fitness):
+    # If generation is 1, open the file in write mode to clear it
+    mode = "w" if generation == 1 else "a"
+
+    # Open the file in the appropriate mode
+    with open("fitness_curve.txt", mode) as file:
+        # Append the generation and fitness values to the file
+        file.write(f"{generation} {fitness}\n")
+
+def plot_fitness_curve():
+    generations = []
+    fitnesses = []
+
+    # Open the fitness_curve.txt file and read the data
+    with open("fitness_curve.txt", "r") as file:
+        for line in file:
+            # Split each line by spaces and extract generation and fitness
+            generation, fitness = map(int, line.split())
+            generations.append(generation)
+            fitnesses.append(fitness)
+
+    # Plot the fitness over generations
+    plt.figure(figsize=(10, 6))
+    plt.plot(generations, fitnesses, linestyle='-', color='b')
+    plt.title('Fitness Over Generations')
+    plt.xlabel('Generation')
+    plt.ylabel('Fitness')
+    plt.grid(True)
+    plt.savefig('fitness over generations.png')
+
+
+    # Display the plot
+    plt.show()
 
 def get_fitness(individual):
     return (individual[1])
 
-
 def get_tiles(individual):
     return (individual[0])
+
 
 
 def main():
@@ -366,10 +427,15 @@ def main():
 
     print_fitness(candidate_solutions)
 
-    for x in range(NUMBER_OF_GENERATIONS):
-        candidate_solutions = generation(candidate_solutions)
+    candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
     print_fitness(candidate_solutions)
+
+    save_individual(candidate_solutions[0])
+
+    # print_gui(candidate_solutions[0])
+
+    plot_fitness_curve()
 
 
 
