@@ -5,10 +5,8 @@ import bisect
 PUZZLE_SIZE = 64
 GRID = 8
 
-CANDIDATE_SOLUTIONS = []
-
-POPULATION_SIZE = 5
-NUMBER_OF_GENERATIONS = 50
+POPULATION_SIZE = 20
+NUMBER_OF_GENERATIONS = 500
 
 GENERATION_GAP = 1  # proportion of the population replaced
 
@@ -17,9 +15,12 @@ TOURNAMENT_SAMPLE_SIZE = 3
 MUTATION_MOVE_PROBABILITY = 1
 MUTATION_ROTATE_PROBABILITY = 1
 
+ROUND_ROBIN_TOURNAMENT_SIZE = 10
+
 
 # Function to rotate a tile based on the orientation
-def initialize_candidate_solutions():
+def initialize():
+    candidate_solutions = []
     tiles_temp = []
     candidate_solution = [[] for _ in range(POPULATION_SIZE)]
 
@@ -65,10 +66,12 @@ def initialize_candidate_solutions():
         fitness = fitness_test(candidate_solution[i])
 
         # Append the solution and its fitness to a tuple
-        CANDIDATE_SOLUTIONS.append((candidate_solution[i], fitness))
+        candidate_solutions.append((candidate_solution[i], fitness))
 
     # Sort the list based on fitness
-    CANDIDATE_SOLUTIONS.sort(key=lambda x: x[1])
+    candidate_solutions.sort(key=lambda x: x[1])
+
+    return candidate_solutions
 
 
 def generate_candidate_solution():
@@ -115,15 +118,15 @@ def generate_candidate_solution():
     return (candidate_solution, fitness)
 
 
-def insert_candidate(candidate):
+def insert_candidate(candidate, candidate_solutions):
     # Insert new_individual into already sorted candidate_solutions in the correct position
     index = bisect.bisect_left(
-        [fitness[1] for fitness in CANDIDATE_SOLUTIONS],  # Extract all fitnesses
+        [fitness[1] for fitness in candidate_solutions],  # Extract all fitnesses
         candidate[1]  # candidate's fitness
     )
-    CANDIDATE_SOLUTIONS.insert(index, candidate)
+    candidate_solutions.insert(index, candidate)
 
-    return index
+    return (candidate_solutions)
 
 
 def rotate_tile(tile, orientation):
@@ -164,7 +167,7 @@ def fitness_test(candidate_solution):
     return mismatches
 
 
-def selection_tournament():
+def selection_tournament(candidate_solutions):
     # Implement selection based on tournament selection
     # Variables that affect pressure:
     # Rank of individual
@@ -174,15 +177,20 @@ def selection_tournament():
 
     tournament_list = []
 
-    # Select individuals at random and save their index into a list
+    # Get random list of candidates' index and their fitness
     for i in range(TOURNAMENT_SAMPLE_SIZE):
-        selected = random.randint(0, POPULATION_SIZE - 1)
-        tournament_list.append(selected)
+        index = random.randint(0, POPULATION_SIZE - 1)
+        fitness = candidate_solutions[index][1]
+        individual = (index, fitness)
+        tournament_list.append(individual)
 
-    tournament_list.sort()
+        tournament_list.sort(key=lambda x: x[1])
 
-    # Return the fittest with 100% probability
-    return (CANDIDATE_SOLUTIONS[0])
+    # Fittest individual is first on the list
+    best_index = tournament_list[0][0]
+
+    # Return the fittest
+    return candidate_solutions[best_index]
 
 
 def mutation(candidate_solution):
@@ -225,6 +233,7 @@ def crossover(candidate_solution_1, candidate_solution_2):
 
     return new_individual
 
+
 def probability(probability):
     # returns true or false with the probability of the value given (0-1)
     if random.random() <= probability:
@@ -232,6 +241,73 @@ def probability(probability):
     else:
         return False
 
+
+def round_robin(candidate_solutions):
+    # Returns a sorted list of the best performing indexes
+
+    # Survivor selection using roundrobin
+    round_robin_list = []
+
+    # Compare each candidate to a set of opponents
+    for index, candidate in enumerate(candidate_solutions):
+        current_fitness = candidate[1]
+        number_of_wins = 0
+
+        # Create list of opponents' fitness
+        opponents = []
+        for x in range(ROUND_ROBIN_TOURNAMENT_SIZE):
+            random_individual = random.choice(candidate_solutions)
+            opponents.append(random_individual[1])
+
+        # Compare opponents to accumulate wins
+        for x in opponents:
+            if current_fitness <= x:
+                number_of_wins += 1
+
+        round_robin_list.append((index, number_of_wins))
+
+    # Create sorted list of each candidate's index and wins
+    round_robin_list.sort(reverse=True, key=lambda x: x[1])
+
+    round_robin_sorted = []
+
+    # Get just the list of best performing indexes
+    for i in round_robin_list:
+        round_robin_sorted.append(i[0])
+
+    return round_robin_sorted
+
+def generation(candidate_solutions):
+    # A single generation cycle
+    # Reduce number of solutions through survivor selection
+
+
+    # Select parents
+    parent = []
+    parent.append(selection_tournament(candidate_solutions))
+    parent.append(selection_tournament(candidate_solutions))
+    parent.append(selection_tournament(candidate_solutions))
+
+    # Create offsprings
+    offspring = []
+    offspring.append(crossover(parent[0], parent[1]))
+    offspring.append(mutation(parent[2]))
+
+    # Add offsprings to global population
+    for individual in offspring:
+        insert_candidate(individual, candidate_solutions)
+
+    # round_robin() returns a sorted list of the best performing indexes
+    roundrobin = round_robin(candidate_solutions)
+
+    # Create new population with best roundrobin results
+    new_generation = []
+
+    for i in range(0, POPULATION_SIZE):
+        new_generation.append(candidate_solutions[roundrobin[i]])
+
+    # Replace old generation
+    return new_generation
 
 def print_gui(candidate_solution_tuple):
     candidate_solution = candidate_solution_tuple[0]
@@ -246,7 +322,7 @@ def print_gui(candidate_solution_tuple):
     # Iterate through the candidate_solution and create labels for each tile
     for row in range(GRID):
         for col in range(GRID):
-            tile = candidate_solution[row * grid + col]
+            tile = candidate_solution[row * GRID + col]
 
             # Create a label for each tile, displaying the edges in a square-like format
             label_text = f"  {tile[0]}  \n{tile[3]}   {tile[1]}\n  {tile[2]}  "
@@ -257,17 +333,17 @@ def print_gui(candidate_solution_tuple):
     window.mainloop()
 
 
-def print_fitness():
+def print_fitness(candidate_solutions):
     fitnesses = []
 
-    for candidate in CANDIDATE_SOLUTIONS:
+    for candidate in candidate_solutions:
         fitnesses.append(candidate[1])
 
     print(fitnesses)
 
 
-def print_solutions():
-    for candidate in CANDIDATE_SOLUTIONS:
+def print_solutions(candidate_solutions):
+    for candidate in candidate_solutions:
         print(candidate)
 
 
@@ -280,12 +356,21 @@ def get_tiles(individual):
 
 
 def main():
+
     # Solutions is sorted population-long list of (candidate[64] , fitness)
     # Edge:          candidate_solutions[1][0][1][3]
     # Single Tile:   candidate_solutions[x][0][63]
     # Tiles:         candidate_solutions[x][0]
     # Fitness        candidate_solutions[x][1]
-    initialize_candidate_solutions()
+    candidate_solutions = initialize()
+
+    print_fitness(candidate_solutions)
+
+    for x in range(NUMBER_OF_GENERATIONS):
+        candidate_solutions = generation(candidate_solutions)
+
+    print_fitness(candidate_solutions)
+
 
 
 # This block ensures the main function is only executed when the script is run directly
