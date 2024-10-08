@@ -4,9 +4,19 @@ import bisect
 
 PUZZLE_SIZE = 64
 GRID = 8
+
+CANDIDATE_SOLUTIONS = []
+
 POPULATION_SIZE = 5
 NUMBER_OF_GENERATIONS = 50
-CANDIDATE_SOLUTIONS = []
+
+GENERATION_GAP = 1  # proportion of the population replaced
+
+TOURNAMENT_SAMPLE_SIZE = 3
+
+MUTATION_MOVE_PROBABILITY = 1
+MUTATION_ROTATE_PROBABILITY = 1
+
 
 # Function to rotate a tile based on the orientation
 def initialize_candidate_solutions():
@@ -60,6 +70,7 @@ def initialize_candidate_solutions():
     # Sort the list based on fitness
     CANDIDATE_SOLUTIONS.sort(key=lambda x: x[1])
 
+
 def generate_candidate_solution():
     tiles_temp = []
     candidate_solution = []  # Initialize candidate_solution as an empty list
@@ -103,15 +114,18 @@ def generate_candidate_solution():
     # Return the solution and its fitness as a tuple
     return (candidate_solution, fitness)
 
+
 def insert_candidate(candidate):
     # Insert new_individual into already sorted candidate_solutions in the correct position
     index = bisect.bisect_left(
         [fitness[1] for fitness in CANDIDATE_SOLUTIONS],  # Extract all fitnesses
-        candidate[1]                                      #candidate's fitness
+        candidate[1]  # candidate's fitness
     )
     CANDIDATE_SOLUTIONS.insert(index, candidate)
 
     return index
+
+
 def rotate_tile(tile, orientation):
     if orientation == 0:
         return tile  # No rotation
@@ -124,6 +138,7 @@ def rotate_tile(tile, orientation):
     elif orientation == 3:
         # Rotate 270 degrees
         return [tile[1], tile[2], tile[3], tile[0]]  # [right, bottom, left, top]
+
 
 def fitness_test(candidate_solution):
     mismatches = 0
@@ -148,9 +163,75 @@ def fitness_test(candidate_solution):
 
     return mismatches
 
-def selection():
-    #implement selection based on tournament selection or roulette wheel
-    test = 5
+
+def selection_tournament():
+    # Implement selection based on tournament selection
+    # Variables that affect pressure:
+    # Rank of individual
+    # Tournament size
+    # Having replacement of not
+    # If winning 100% of the time or with probability p
+
+    tournament_list = []
+
+    # Select individuals at random and save their index into a list
+    for i in range(TOURNAMENT_SAMPLE_SIZE):
+        selected = random.randint(0, POPULATION_SIZE - 1)
+        tournament_list.append(selected)
+
+    tournament_list.sort()
+
+    # Return the fittest with 100% probability
+    return (CANDIDATE_SOLUTIONS[0])
+
+
+def mutation(candidate_solution):
+    # Select 2 random tiles to swap
+    random_index_1 = random.randint(0, PUZZLE_SIZE - 1)
+    random_index_2 = random.randint(0, PUZZLE_SIZE - 1)
+
+    candidate_solution[0][random_index_1], candidate_solution[0][random_index_2] = candidate_solution[0][
+        random_index_2], candidate_solution[0][random_index_1]
+
+    # Apply random rotation on only one tile
+    rotation = random.randint(0, 3)
+    rotated_tile = rotate_tile(candidate_solution[0][random_index_2], rotation)
+    candidate_solution[0][random_index_2] = rotated_tile
+
+    # Get new fitness
+    fitness = fitness_test(candidate_solution[0])
+    new_candidate_solution = (candidate_solution[0], fitness)
+
+    return new_candidate_solution
+
+
+def crossover(candidate_solution_1, candidate_solution_2):
+    # Split and swap two individuals
+    crossover_point = random.randint(0, PUZZLE_SIZE - 1)
+    new_tiles = []
+
+    crossover_point = 3
+
+    # Swap tiles
+    for i in range(0, crossover_point):
+        new_tiles.append(candidate_solution_1[0][i])
+
+    for i in range(crossover_point, len(candidate_solution_1[0])):
+        new_tiles.append(candidate_solution_2[0][i])
+
+    # Create new individual with the swapped tiles and fitness
+    fitness = fitness_test(new_tiles)
+    new_individual = (new_tiles, fitness)
+
+    return new_individual
+
+def probability(probability):
+    # returns true or false with the probability of the value given (0-1)
+    if random.random() <= probability:
+        return True
+    else:
+        return False
+
 
 def print_gui(candidate_solution_tuple):
     candidate_solution = candidate_solution_tuple[0]
@@ -175,6 +256,7 @@ def print_gui(candidate_solution_tuple):
     # Start the Tkinter main loop to display the window
     window.mainloop()
 
+
 def print_fitness():
     fitnesses = []
 
@@ -183,28 +265,29 @@ def print_fitness():
 
     print(fitnesses)
 
+
 def print_solutions():
     for candidate in CANDIDATE_SOLUTIONS:
         print(candidate)
 
+
 def get_fitness(individual):
-    return(individual[1])
+    return (individual[1])
+
 
 def get_tiles(individual):
-    return(individual[0])
+    return (individual[0])
+
 
 def main():
-    #Solutions are population-long list of (candidate[64] , fitness <-already sorted)
-    #Edge:          candidate_solutions[1][0][1][3]
-    #Single Tile:   candidate_solutions[x][0][63]
-    #Tiles:         candidate_solutions[x][0]
-    #Fitness        candidate_solutions[x][1]
+    # Solutions is sorted population-long list of (candidate[64] , fitness)
+    # Edge:          candidate_solutions[1][0][1][3]
+    # Single Tile:   candidate_solutions[x][0][63]
+    # Tiles:         candidate_solutions[x][0]
+    # Fitness        candidate_solutions[x][1]
     initialize_candidate_solutions()
 
-    print_solutions()
 
 # This block ensures the main function is only executed when the script is run directly
 if __name__ == "__main__":
     main()
-
-
