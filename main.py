@@ -296,14 +296,15 @@ def generation(candidate_solutions, generations):
 
         # Select parents
         parent = []
-        parent.append(selection_tournament(old_generation))
-        parent.append(selection_tournament(old_generation))
-        parent.append(selection_tournament(old_generation))
+        for i in range (0,20):
+            parent.append(selection_tournament(old_generation))
+
 
         # Create offsprings
         offspring = []
-        offspring.append(crossover(parent[0], parent[1]))
-        offspring.append(mutation(parent[2]))
+        for i in range (0,10):
+            offspring.append(crossover(parent[i], parent[i+1]))
+            offspring.append(mutation(parent[i]))
 
         # Add offsprings to global population
         for individual in offspring:
