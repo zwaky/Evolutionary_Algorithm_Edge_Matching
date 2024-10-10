@@ -1,3 +1,4 @@
+import math
 import random
 import tkinter as tk
 import bisect
@@ -7,22 +8,22 @@ from matplotlib import pyplot as plt
 PUZZLE_SIZE = 64
 GRID = 8
 
-POPULATION_SIZE = 100
+POPULATION_SIZE = 500
 NUMBER_OF_GENERATIONS = 100
 
 GENERATION_GAP = 1  # proportion of the population replaced
 
 TOURNAMENT_SAMPLE_SIZE = 10
 
-MUTATION_MOVE_PROBABILITY = 1
-MUTATION_ROTATE_PROBABILITY = 1
+MUTATION_MOVE_PROBABILITY = 0.1
+MUTATION_ROTATE_PROBABILITY = 0.1
+CROSSOVER_PROBABILITY = 0.01
 
 ROUND_ROBIN_TOURNAMENT_SIZE = 10
 
 # Lists to hold information until program ends
 fitness_data = []
 diversity_data = []
-
 
 # Function to rotate a tile based on the orientation
 def initialize():
@@ -174,13 +175,6 @@ def fitness_test(candidate_solution):
 
 
 def selection_tournament(candidate_solutions):
-    # Implement selection based on tournament selection
-    # Variables that affect pressure:
-    # Rank of individual
-    # Tournament size
-    # Having replacement of not
-    # If winning 100% of the time or with probability p
-
     tournament_list = []
 
     # Get random list of candidates' index and their fitness
@@ -192,11 +186,14 @@ def selection_tournament(candidate_solutions):
 
         tournament_list.sort(key=lambda x: x[1])
 
-    # Fittest individual is first on the list
-    best_index = tournament_list[0][0]
+    # Selection using rank and exponential probability
+    # Loop through the list until probability True and select that individual
+    while True:
+        for i in range(0, len(tournament_list)):
+            probability_of_selection = math.exp(-(i + 1)) / TOURNAMENT_SAMPLE_SIZE
 
-    # Return the fittest
-    return candidate_solutions[best_index]
+            if probability(probability_of_selection):
+                return candidate_solutions[tournament_list[i][0]]
 
 
 def mutation(candidate_solution):
@@ -204,13 +201,16 @@ def mutation(candidate_solution):
     random_index_1 = random.randint(0, PUZZLE_SIZE - 1)
     random_index_2 = random.randint(0, PUZZLE_SIZE - 1)
 
-    candidate_solution[0][random_index_1], candidate_solution[0][random_index_2] = candidate_solution[0][
-        random_index_2], candidate_solution[0][random_index_1]
+    # Apply ration swap
+    if probability(MUTATION_MOVE_PROBABILITY):
+        candidate_solution[0][random_index_1], candidate_solution[0][random_index_2] = candidate_solution[0][
+            random_index_2], candidate_solution[0][random_index_1]
 
     # Apply random rotation on only one tile
-    rotation = random.randint(0, 3)
-    rotated_tile = rotate_tile(candidate_solution[0][random_index_2], rotation)
-    candidate_solution[0][random_index_2] = rotated_tile
+    if probability(MUTATION_ROTATE_PROBABILITY):
+        rotation = random.randint(0, 3)
+        rotated_tile = rotate_tile(candidate_solution[0][random_index_2], rotation)
+        candidate_solution[0][random_index_2] = rotated_tile
 
     # Get new fitness
     fitness = fitness_test(candidate_solution[0])
@@ -222,30 +222,31 @@ def mutation(candidate_solution):
 def crossover(candidate_solution_1, candidate_solution_2):
     # Split and swap two individuals
     crossover_point = random.randint(0, PUZZLE_SIZE - 1)
-    new_tiles = []
-
-    crossover_point = 3
+    new_tiles_1 = []
+    new_tiles_2 = []
 
     # Swap tiles
     for i in range(0, crossover_point):
-        new_tiles.append(candidate_solution_1[0][i])
+        new_tiles_1.append(candidate_solution_1[0][i])
+        new_tiles_2.append(candidate_solution_2[0][i])
 
     for i in range(crossover_point, len(candidate_solution_1[0])):
-        new_tiles.append(candidate_solution_2[0][i])
+        new_tiles_1.append(candidate_solution_2[0][i])
+        new_tiles_2.append(candidate_solution_1[0][i])
 
     # Create new individual with the swapped tiles and fitness
-    fitness = fitness_test(new_tiles)
-    new_individual = (new_tiles, fitness)
+    fitness = fitness_test(new_tiles_1)
+    new_individual_1 = (new_tiles_1, fitness)
 
-    return new_individual
+    fitness = fitness_test(new_tiles_2)
+    new_individual_2 = (new_tiles_2, fitness)
+
+    return new_individual_1, new_individual_2
 
 
 def probability(probability):
     # returns true or false with the probability of the value given (0-1)
-    if random.random() <= probability:
-        return True
-    else:
-        return False
+    return random.random() <= probability
 
 
 def round_robin(candidate_solutions):
@@ -296,19 +297,27 @@ def generation(candidate_solutions, generations):
 
         # Select parents
         parent = []
-        for i in range (0,20):
-            parent.append(selection_tournament(old_generation))
-
+        for i in range(0, 10):
+            chosen = selection_tournament(old_generation)
+            parent.append(chosen)
 
         # Create offsprings
         offspring = []
-        for i in range (0,3):
-            offspring.append(crossover(parent[i], parent[i+1]))
-            offspring.append(mutation(parent[i]))
+        for i in range(len(parent)-1):
+            if probability(CROSSOVER_PROBABILITY):
+                crossover_1,crossover_2 = crossover(parent[i], parent[i + 1])
+                offspring.append(crossover_1)
+                offspring.append(crossover_2)
+            # offspring.append(mutation(parent[i]))
+
 
         # Add offsprings to global population
         for individual in offspring:
             insert_candidate(individual, old_generation)
+
+        # Mutate whole population with probability
+        for i in range(0, len(old_generation)):
+            old_generation[i] = mutation(old_generation[i])
 
         # round_robin() returns a sorted list of the best performing indexes
         roundrobin = round_robin(old_generation)
@@ -325,18 +334,18 @@ def generation(candidate_solutions, generations):
 
         # Save current generation into array
         fitness_data.append((current_generation, new_generation[0][1]))
-        diversity_data.append((current_generation, average_permutation_diversity(new_generation)))
+        # diversity_data.append((current_generation, average_permutation_diversity(new_generation)))
 
     # Save all fitnesses into file at the end of generation cycle
     save_fitness_curve()
     save_diversity_curve()
-
 
     return new_generation
 
 
 def permutation_distance(candidate_1, candidate_2):
     return sum(c1 != c2 for c1, c2 in zip(candidate_1[0], candidate_2[0]))
+
 
 def average_permutation_diversity(candidate_solutions):
     total_distance = 0
@@ -408,11 +417,13 @@ def save_fitness_curve(filename="fitness_curve.txt"):
         for generation, fitness in fitness_data:
             file.write(f"{generation} {fitness}\n")
 
+
 def save_diversity_curve(filename="diversity_curve.txt"):
     """Save the diversity data to a file after all generations are done."""
     with open(filename, "w") as file:
         for generation, diversity in diversity_data:
             file.write(f"{generation} {diversity}\n")
+
 
 def plot_fitness_curve():
     generations = []
@@ -438,6 +449,7 @@ def plot_fitness_curve():
     # Display the plot
     plt.show()
 
+
 def plot_diversity_curve():
     generations = []
     diversity = []
@@ -448,7 +460,7 @@ def plot_diversity_curve():
             # Split each line by spaces and extract generation and diversity
             generation, div_value = line.split()
             generations.append(int(generation))  # Convert generation to int
-            diversity.append(float(div_value))   # Convert diversity to float
+            diversity.append(float(div_value))  # Convert diversity to float
 
     # Plot the fitness over generations
     plt.figure(figsize=(10, 6))
@@ -461,6 +473,7 @@ def plot_diversity_curve():
 
     # Display the plot
     plt.show()
+
 
 def get_fitness(individual):
     return (individual[1])
@@ -478,13 +491,14 @@ def main():
     # Fitness        candidate_solutions[x][1]
     candidate_solutions = initialize()
 
-    average_permutation_diversity(candidate_solutions)
+    # average_permutation_diversity(candidate_solutions)
 
     candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
-    plot_diversity_curve()
+    # plot_diversity_curve()
     plot_fitness_curve()
 
+    print(candidate_solutions[0][1])
 
 # This block ensures the main function is only executed when the script is run directly
 if __name__ == "__main__":
