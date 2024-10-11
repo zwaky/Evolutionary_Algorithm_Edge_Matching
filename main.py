@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 PUZZLE_SIZE = 64
 GRID = 8
 
-POPULATION_SIZE = 10
+POPULATION_SIZE = 100
 NUMBER_OF_GENERATIONS = 100
 
 TOURNAMENT_SAMPLE_SIZE = 3
@@ -288,7 +288,7 @@ def pmx_crossover(candidate_solution_1, candidate_solution_2):
     if point1 > point2:
         point1, point2 = point2, point1
 
-    # Copy mapping sections
+    # Copy mapping sections from parents to children
     for i in range(point1, point2 + 1):
         child1_ids[i] = parent1_ids[i]
         child1_rotations[i] = parent1_rotations[i]
@@ -298,18 +298,20 @@ def pmx_crossover(candidate_solution_1, candidate_solution_2):
         child2_rotations[i] = parent2_rotations[i]
         child2_rotated_tiles[i] = parent2_rotated_tiles[i]
 
-    # Build mappings
+    # Build mappings between parents
     mapping1 = {parent2_ids[i]: parent1_ids[i] for i in range(point1, point2 + 1)}
     mapping2 = {parent1_ids[i]: parent2_ids[i] for i in range(point1, point2 + 1)}
 
-    # Fill rest of child1
+    # Fill the rest of child1
     for i in range(size):
         if not (point1 <= i <= point2):
             gene = parent2_ids[i]
-            orig_gene = gene
-            while gene in mapping1:
+            visited = set()
+            while gene in mapping1 and gene not in visited:
+                visited.add(gene)
                 gene = mapping1[gene]
             child1_ids[i] = gene
+
             # Find rotation and rotated tile
             if gene in parent2_ids:
                 idx_in_parent2 = parent2_ids.index(gene)
@@ -320,14 +322,16 @@ def pmx_crossover(candidate_solution_1, candidate_solution_2):
                 child1_rotations[i] = parent1_rotations[idx_in_parent1]
                 child1_rotated_tiles[i] = parent1_rotated_tiles[idx_in_parent1]
 
-    # Fill rest of child2
+    # Fill the rest of child2
     for i in range(size):
         if not (point1 <= i <= point2):
             gene = parent1_ids[i]
-            orig_gene = gene
-            while gene in mapping2:
+            visited = set()
+            while gene in mapping2 and gene not in visited:
+                visited.add(gene)
                 gene = mapping2[gene]
             child2_ids[i] = gene
+
             # Find rotation and rotated tile
             if gene in parent1_ids:
                 idx_in_parent1 = parent1_ids.index(gene)
@@ -339,25 +343,19 @@ def pmx_crossover(candidate_solution_1, candidate_solution_2):
                 child2_rotated_tiles[i] = parent2_rotated_tiles[idx_in_parent2]
 
     # Reconstruct offspring tiles
-    child1_tiles = []
-    for i in range(size):
-        rotated_tile = child1_rotated_tiles[i]
-        tile_id = child1_ids[i]
-        rotation = child1_rotations[i]
-        child1_tiles.append([rotated_tile, tile_id, rotation])
-
-    child2_tiles = []
-    for i in range(size):
-        rotated_tile = child2_rotated_tiles[i]
-        tile_id = child2_ids[i]
-        rotation = child2_rotations[i]
-        child2_tiles.append([rotated_tile, tile_id, rotation])
+    child1_tiles = [
+        [child1_rotated_tiles[i], child1_ids[i], child1_rotations[i]] for i in range(size)
+    ]
+    child2_tiles = [
+        [child2_rotated_tiles[i], child2_ids[i], child2_rotations[i]] for i in range(size)
+    ]
 
     # Compute fitness
     fitness1 = fitness_test(child1_tiles)
     fitness2 = fitness_test(child2_tiles)
 
     return (child1_tiles, fitness1), (child2_tiles, fitness2)
+
 
 
 def probability(probability):
@@ -403,13 +401,13 @@ def round_robin(candidate_solutions):
 
 def generation(candidate_solutions, generations):
     # Go through several generations. Returns the whole population at the end
-    new_generation = candidate_solutions
+    new_generation = []
     current_generation = 0
     old_generation = candidate_solutions
 
     while generations > 0:
 
-        new_generation = [] 
+        new_generation = []
 
         # Select parents
         parent = []
@@ -422,6 +420,13 @@ def generation(candidate_solutions, generations):
         for i in range(len(parent) - 1):
             if probability(CROSSOVER_PROBABILITY):
                 crossover_1, crossover_2 = pmx_crossover(parent[i], parent[i + 1])
+                # print(parent[i])
+                # print(crossover_1)
+                # print()
+
+                # crossover_1 = old_generation[0]
+                # crossover_2 = old_generation[1]
+
                 offspring.append(crossover_1)
                 offspring.append(crossover_2)
 
@@ -433,7 +438,7 @@ def generation(candidate_solutions, generations):
         # Add offsprings to global population
         for individual in offspring:
             insert_candidate(individual, old_generation)
-        old_generation.sort(key=lambda x: x[1])
+        # old_generation.sort(key=lambda x: x[1])
 
 
         # round_robin() returns a sorted list of the best performing indexes
@@ -444,8 +449,6 @@ def generation(candidate_solutions, generations):
         for i in range(0, POPULATION_SIZE):
             selected_individual = old_generation[roundrobin[i]]
             new_generation.append(selected_individual)
-
-            print(len(new_generation))
 
 
         # Replace old generation
