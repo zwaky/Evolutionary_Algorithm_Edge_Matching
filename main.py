@@ -8,14 +8,20 @@ from matplotlib import pyplot as plt
 PUZZLE_SIZE = 64
 GRID = 8
 
-POPULATION_SIZE = 100
+POPULATION_SIZE = 50
 NUMBER_OF_GENERATIONS = 100
 
 TOURNAMENT_SAMPLE_SIZE = 3
 ROUND_ROBIN_TOURNAMENT_SIZE = 5
 
-MUTATION_PROBABILITY = 0.01
+MUTATION_PROBABILITY = 1
+MUTATION_PROBABILITY_MINIMUM = 0.1
+MUTATION_PROBABILITY_MAXIMUM = 1
 CROSSOVER_PROBABILITY = 0.7
+CROSSOVER_PROBABILITY_MINIMUM = 0.1
+CROSSOVER_PROBABILITY_MAXIMUM = 1
+
+
 
 Enable_diversity = True
 
@@ -212,26 +218,40 @@ def selection_tournament(candidate_solutions):
                 return candidate_solutions[tournament_list[i][0]]
 
 
-def mutation(candidate_solution):
-    # Select 2 random tiles to swap
-    random_index_1 = random.randint(0, PUZZLE_SIZE - 1)
-    random_index_2 = random.randint(0, PUZZLE_SIZE - 1)
+def mutation(candidate_solution, min_fit, max_fit):
 
-    # Apply swap
-    candidate_solution[0][random_index_1], candidate_solution[0][random_index_2] = candidate_solution[0][
-        random_index_2], candidate_solution[0][random_index_1]
+    # Fitness based mutation. Individuals with worse fitness have greater chance of mutation
+    current_fitness = candidate_solution[1]
+    if min_fit<current_fitness: min_fit = current_fitness
 
-    # Apply random rotation on only one tile
-    rotation = random.randint(0, 3)
+    # Divide by 0 check
+    if max_fit - min_fit == 0:
+        probability_mutation = MUTATION_PROBABILITY_MINIMUM
+    else:
+        probability_mutation = 1- (MUTATION_PROBABILITY_MINIMUM + (MUTATION_PROBABILITY_MAXIMUM - MUTATION_PROBABILITY_MINIMUM) * math.pow(1-(current_fitness-min_fit)/(max_fit-min_fit) , 1))
 
-    rotated_tile = rotate_tile(candidate_solution[0][random_index_2][0], rotation)
-    candidate_solution[0][random_index_2][0] = rotated_tile
+    if (probability(probability_mutation)):
+        # Select 2 random tiles to swap
+        random_index_1 = random.randint(0, PUZZLE_SIZE - 1)
+        random_index_2 = random.randint(0, PUZZLE_SIZE - 1)
 
-    # Get new fitness
-    fitness = fitness_test(candidate_solution[0])
-    new_candidate_solution = (candidate_solution[0], fitness)
+        # Apply swap
+        candidate_solution[0][random_index_1], candidate_solution[0][random_index_2] = candidate_solution[0][
+            random_index_2], candidate_solution[0][random_index_1]
 
-    return new_candidate_solution
+        # Apply random rotation on only one tile
+        rotation = random.randint(0, 3)
+
+        rotated_tile = rotate_tile(candidate_solution[0][random_index_2][0], rotation)
+        candidate_solution[0][random_index_2][0] = rotated_tile
+
+        # Get new fitness
+        fitness = fitness_test(candidate_solution[0])
+        new_candidate_solution = (candidate_solution[0], fitness)
+
+        return new_candidate_solution
+    else:
+        return candidate_solution
 
 
 def crossover(candidate_solution_1, candidate_solution_2):
@@ -258,7 +278,17 @@ def crossover(candidate_solution_1, candidate_solution_2):
 
     return new_individual_1, new_individual_2
 
-def pmx_crossover(candidate_solution_1, candidate_solution_2):
+def pmx_crossover(candidate_solution_1, candidate_solution_2, min_fit, max_fit):
+
+    # Fitness based crossover. Individuals with worse fitness have greater chance of mutation
+    average_fitness = (candidate_solution_1[1] + candidate_solution_2[1]) / 2
+
+    # Division by zero check
+    if max_fit-min_fit == 0:
+        probability_crossover = CROSSOVER_PROBABILITY_MINIMUM
+    else:
+        probability_crossover = (CROSSOVER_PROBABILITY_MINIMUM + (CROSSOVER_PROBABILITY_MAXIMUM - MUTATION_PROBABILITY_MINIMUM) * math.pow(1-(average_fitness-min_fit)/(max_fit-min_fit) , 1))
+
     parent1_tiles = candidate_solution_1[0]
     parent2_tiles = candidate_solution_2[0]
     size = len(parent1_tiles)
@@ -356,8 +386,6 @@ def pmx_crossover(candidate_solution_1, candidate_solution_2):
 
     return (child1_tiles, fitness1), (child2_tiles, fitness2)
 
-
-
 def probability(probability):
     # returns true or false with the probability of the value given (0-1)
     return random.random() <= probability
@@ -411,29 +439,36 @@ def generation(candidate_solutions, generations):
 
         # Select parents
         parent = []
-        for i in range(0, 4):
+        for i in range(0, 20):
             chosen = selection_tournament(old_generation)
             parent.append(chosen)
 
         # Create offsprings
         offspring = []
         for i in range(len(parent) - 1):
-            if probability(CROSSOVER_PROBABILITY):
-                crossover_1, crossover_2 = pmx_crossover(parent[i], parent[i + 1])
-                # print(parent[i])
-                # print(crossover_1)
-                # print()
 
-                # crossover_1 = old_generation[0]
-                # crossover_2 = old_generation[1]
+            min_fitness = old_generation[-1][1]
+            max_fitness = old_generation[0][1]
 
-                offspring.append(crossover_1)
-                offspring.append(crossover_2)
+            crossover_1, crossover_2 = pmx_crossover(parent[i], parent[i + 1], min_fitness, max_fitness)
+
+            offspring.append(crossover_1)
+            offspring.append(crossover_2)
 
         # Mutate whole population with probability. If mutated, add to pool
         for i in range(0, len(old_generation)):
-            if probability(MUTATION_PROBABILITY):
-                offspring.append(mutation(old_generation[i]))
+
+            # Care fitness is inversed here
+            min_fitness = old_generation[-1][1]
+            max_fitness = old_generation[0][1]
+
+            mutated = mutation(old_generation[i], min_fitness, max_fitness)
+            # Only add offspring if the mutation improved fitness
+            old_fitness = old_generation[i][1]
+            new_fitness = mutated[1]
+            if new_fitness>=old_fitness:
+                offspring.append(mutated)
+
 
         # Add offsprings to global population
         for individual in offspring:
@@ -623,7 +658,7 @@ def main():
 
     candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
-
+    print(candidate_solutions[0][1])
 
     if Enable_diversity:
         plot_diversity_curve()
