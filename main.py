@@ -9,19 +9,19 @@ PUZZLE_SIZE = 64
 GRID = 8
 
 POPULATION_SIZE = 50
-NUMBER_OF_GENERATIONS = 100
+NUMBER_OF_GENERATIONS = 50
+NUMBER_OF_PARENTS = 10
 
 TOURNAMENT_SAMPLE_SIZE = 3
-ROUND_ROBIN_TOURNAMENT_SIZE = 5
+ROUND_ROBIN_TOURNAMENT_SIZE = 10
 
-MUTATION_PROBABILITY = 1
-MUTATION_PROBABILITY_MINIMUM = 0.1
-MUTATION_PROBABILITY_MAXIMUM = 1
-CROSSOVER_PROBABILITY = 0.7
-CROSSOVER_PROBABILITY_MINIMUM = 0.1
-CROSSOVER_PROBABILITY_MAXIMUM = 1
+MUTATION_PROBABILITY_MINIMUM = 0.4
+MUTATION_PROBABILITY_MAXIMUM = 0.9
 
+CROSSOVER_PROBABILITY_MINIMUM = 0.4
+CROSSOVER_PROBABILITY_MAXIMUM = 0.8
 
+TOLERANCE = 2
 
 Enable_diversity = True
 
@@ -196,26 +196,34 @@ def fitness_test(candidate_solution):
     return mismatches
 
 
-def selection_tournament(candidate_solutions):
-    tournament_list = []
+def selection_tournament(candidate_solutions, size):
+    selected_candidates = []
 
-    # Get random list of candidates' index and their fitness
-    for i in range(TOURNAMENT_SAMPLE_SIZE):
-        index = random.randint(0, POPULATION_SIZE - 1)
-        fitness = candidate_solutions[index][1]
-        individual = (index, fitness)
-        tournament_list.append(individual)
+    # Loop to select the desired number of candidates
+    for _ in range(size):
+        tournament_list = []
+
+        # Get random list of candidates' index and their fitness
+        for i in range(TOURNAMENT_SAMPLE_SIZE):
+            index = random.randint(0, POPULATION_SIZE - 1)
+            fitness = candidate_solutions[index][1]
+            individual = (index, fitness)
+            tournament_list.append(individual)
 
         tournament_list.sort(key=lambda x: x[1])
 
-    # Selection using rank and exponential probability
-    # Loop through the list until probability True and select that individual
-    while True:
-        for i in range(0, len(tournament_list)):
-            probability_of_selection = math.exp(-(i + 1)) / TOURNAMENT_SAMPLE_SIZE
+        # Selection using rank and exponential probability
+        while True:
+            for i in range(0, len(tournament_list)):
+                probability_of_selection = math.exp(-(i + 1)) / TOURNAMENT_SAMPLE_SIZE
+                if probability(probability_of_selection):
+                    selected_candidates.append(candidate_solutions[tournament_list[i][0]])
+                    break
+            else:
+                continue  # Go back to the while loop if none were selected
+            break  # Break out of the while loop if a candidate was selected
 
-            if probability(probability_of_selection):
-                return candidate_solutions[tournament_list[i][0]]
+    return selected_candidates
 
 
 def mutation(candidate_solution, min_fit, max_fit):
@@ -249,9 +257,9 @@ def mutation(candidate_solution, min_fit, max_fit):
         fitness = fitness_test(candidate_solution[0])
         new_candidate_solution = (candidate_solution[0], fitness)
 
-        return new_candidate_solution
+        return new_candidate_solution, True
     else:
-        return candidate_solution
+        return candidate_solution, False
 
 
 def crossover(candidate_solution_1, candidate_solution_2):
@@ -279,112 +287,89 @@ def crossover(candidate_solution_1, candidate_solution_2):
     return new_individual_1, new_individual_2
 
 def pmx_crossover(candidate_solution_1, candidate_solution_2, min_fit, max_fit):
-
-    # Fitness based crossover. Individuals with worse fitness have greater chance of mutation
+    # Calculate the average fitness of both parent solutions
     average_fitness = (candidate_solution_1[1] + candidate_solution_2[1]) / 2
 
-    # Division by zero check
-    if max_fit-min_fit == 0:
+    # Handle case where max and min fitness are equal to avoid division by zero
+    if max_fit - min_fit == 0:
+        # Set crossover probability to the minimum value
         probability_crossover = CROSSOVER_PROBABILITY_MINIMUM
     else:
-        probability_crossover = (CROSSOVER_PROBABILITY_MINIMUM + (CROSSOVER_PROBABILITY_MAXIMUM - MUTATION_PROBABILITY_MINIMUM) * math.pow(1-(average_fitness-min_fit)/(max_fit-min_fit) , 1))
+        # Adjust crossover probability based on the average fitness (lower fitness -> higher probability)
+        probability_crossover = CROSSOVER_PROBABILITY_MINIMUM + \
+                                (CROSSOVER_PROBABILITY_MAXIMUM - CROSSOVER_PROBABILITY_MINIMUM) * \
+                                math.pow(1 - (average_fitness - min_fit) / (max_fit - min_fit), 1)
 
-    parent1_tiles = candidate_solution_1[0]
-    parent2_tiles = candidate_solution_2[0]
-    size = len(parent1_tiles)
+    # If crossover is triggered (based on the calculated probability)
+    if probability(probability_crossover):
 
-    # Extract tile IDs and rotations
-    parent1_ids = [tile[1] for tile in parent1_tiles]
-    parent1_rotations = [tile[2] for tile in parent1_tiles]
-    parent1_rotated_tiles = [tile[0] for tile in parent1_tiles]
+        # Extract the "tiles" from both parents (solution representation)
+        parent1_tiles = candidate_solution_1[0]
+        parent2_tiles = candidate_solution_2[0]
+        size = len(parent1_tiles)  # Length of the solution (number of tiles)
 
-    parent2_ids = [tile[1] for tile in parent2_tiles]
-    parent2_rotations = [tile[2] for tile in parent2_tiles]
-    parent2_rotated_tiles = [tile[0] for tile in parent2_tiles]
+        # Extract the tile IDs (index 1 of each tile) for both parents
+        parent1_ids = [tile[1] for tile in parent1_tiles]
+        parent2_ids = [tile[1] for tile in parent2_tiles]
 
-    # Initialize child IDs and rotations
-    child1_ids = [None] * size
-    child1_rotations = [None] * size
-    child1_rotated_tiles = [None] * size
+        # Initialize the child solutions with empty slots for IDs
+        child1_ids = [None] * size
+        child2_ids = [None] * size
 
-    child2_ids = [None] * size
-    child2_rotations = [None] * size
-    child2_rotated_tiles = [None] * size
+        # Select two random crossover points for partial mapping
+        point1 = random.randint(0, size - 1)
+        point2 = random.randint(0, size - 1)
 
-    # Choose crossover points
-    point1 = random.randint(0, size - 1)
-    point2 = random.randint(0, size - 1)
+        # Ensure point1 is less than or equal to point2
+        if point1 > point2:
+            point1, point2 = point2, point1
 
-    if point1 > point2:
-        point1, point2 = point2, point1
+        # Copy the segment between the crossover points from parents to children
+        for i in range(point1, point2 + 1):
+            child1_ids[i] = parent1_ids[i]
+            child2_ids[i] = parent2_ids[i]
 
-    # Copy mapping sections from parents to children
-    for i in range(point1, point2 + 1):
-        child1_ids[i] = parent1_ids[i]
-        child1_rotations[i] = parent1_rotations[i]
-        child1_rotated_tiles[i] = parent1_rotated_tiles[i]
+        # Create mappings between the tiles in the crossover region for both parents
+        mapping1 = {parent2_ids[i]: parent1_ids[i] for i in range(point1, point2 + 1)}  # Mapping for child 1
+        mapping2 = {parent1_ids[i]: parent2_ids[i] for i in range(point1, point2 + 1)}  # Mapping for child 2
 
-        child2_ids[i] = parent2_ids[i]
-        child2_rotations[i] = parent2_rotations[i]
-        child2_rotated_tiles[i] = parent2_rotated_tiles[i]
+        # Define a helper function to fill the rest of the child's solution
+        def fill_child(child_ids, parent_ids, mapping, point1, point2):
+            for i in range(size):
+                # Fill only the positions outside the crossover region
+                if not (point1 <= i <= point2):
+                    gene = parent_ids[i]  # Get the current tile ID from the parent
+                    visited = set()  # Keep track of visited IDs to prevent infinite loops
+                    # Resolve the mapping to avoid duplicate tiles
+                    while gene in mapping and gene not in visited:
+                        visited.add(gene)
+                        gene = mapping[gene]
 
-    # Build mappings between parents
-    mapping1 = {parent2_ids[i]: parent1_ids[i] for i in range(point1, point2 + 1)}
-    mapping2 = {parent1_ids[i]: parent2_ids[i] for i in range(point1, point2 + 1)}
+                    # Ensure no duplicate IDs in the child solution
+                    while gene in child_ids:
+                        # Wrap around to avoid index out of range when searching for a valid ID
+                        gene = parent_ids[parent_ids.index(gene) + 1 if parent_ids.index(gene) + 1 < len(parent_ids) else 0]
 
-    # Fill the rest of child1
-    for i in range(size):
-        if not (point1 <= i <= point2):
-            gene = parent2_ids[i]
-            visited = set()
-            while gene in mapping1 and gene not in visited:
-                visited.add(gene)
-                gene = mapping1[gene]
-            child1_ids[i] = gene
+                    child_ids[i] = gene  # Assign the resolved tile ID to the child
 
-            # Find rotation and rotated tile
-            if gene in parent2_ids:
-                idx_in_parent2 = parent2_ids.index(gene)
-                child1_rotations[i] = parent2_rotations[idx_in_parent2]
-                child1_rotated_tiles[i] = parent2_rotated_tiles[idx_in_parent2]
-            else:
-                idx_in_parent1 = parent1_ids.index(gene)
-                child1_rotations[i] = parent1_rotations[idx_in_parent1]
-                child1_rotated_tiles[i] = parent1_rotated_tiles[idx_in_parent1]
+        # Fill the remaining portions of child1 and child2 outside of the crossover region
+        fill_child(child1_ids, parent2_ids, mapping1, point1, point2)
+        fill_child(child2_ids, parent1_ids, mapping2, point1, point2)
 
-    # Fill the rest of child2
-    for i in range(size):
-        if not (point1 <= i <= point2):
-            gene = parent1_ids[i]
-            visited = set()
-            while gene in mapping2 and gene not in visited:
-                visited.add(gene)
-                gene = mapping2[gene]
-            child2_ids[i] = gene
+        # Rebuild the offspring solutions by combining IDs, rotations, and rotated tiles
+        child1_tiles = [[parent1_tiles[parent1_ids.index(child1_ids[i])][0], child1_ids[i], parent1_tiles[parent1_ids.index(child1_ids[i])][2]] for i in range(size)]
+        child2_tiles = [[parent2_tiles[parent2_ids.index(child2_ids[i])][0], child2_ids[i], parent2_tiles[parent2_ids.index(child2_ids[i])][2]] for i in range(size)]
 
-            # Find rotation and rotated tile
-            if gene in parent1_ids:
-                idx_in_parent1 = parent1_ids.index(gene)
-                child2_rotations[i] = parent1_rotations[idx_in_parent1]
-                child2_rotated_tiles[i] = parent1_rotated_tiles[idx_in_parent1]
-            else:
-                idx_in_parent2 = parent2_ids.index(gene)
-                child2_rotations[i] = parent2_rotations[idx_in_parent2]
-                child2_rotated_tiles[i] = parent2_rotated_tiles[idx_in_parent2]
+        # Compute the fitness of both offspring
+        fitness1 = fitness_test(child1_tiles)
+        fitness2 = fitness_test(child2_tiles)
 
-    # Reconstruct offspring tiles
-    child1_tiles = [
-        [child1_rotated_tiles[i], child1_ids[i], child1_rotations[i]] for i in range(size)
-    ]
-    child2_tiles = [
-        [child2_rotated_tiles[i], child2_ids[i], child2_rotations[i]] for i in range(size)
-    ]
+        # Return both offspring and indicate that crossover was performed
+        return (child1_tiles, fitness1), (child2_tiles, fitness2), True
 
-    # Compute fitness
-    fitness1 = fitness_test(child1_tiles)
-    fitness2 = fitness_test(child2_tiles)
-
-    return (child1_tiles, fitness1), (child2_tiles, fitness2)
+    else:
+        # If crossover didn't happen, return the original parents
+        return candidate_solution_1, candidate_solution_2, False
 
 def probability(probability):
     # returns true or false with the probability of the value given (0-1)
@@ -393,8 +378,8 @@ def probability(probability):
 
 def round_robin(candidate_solutions):
     # Returns a sorted list of the best performing indexes
-
     # Survivor selection using roundrobin
+
     round_robin_list = []
 
     # Compare each candidate to a set of opponents
@@ -426,7 +411,6 @@ def round_robin(candidate_solutions):
 
     return round_robin_sorted
 
-
 def generation(candidate_solutions, generations):
     # Go through several generations. Returns the whole population at the end
     new_generation = []
@@ -439,8 +423,8 @@ def generation(candidate_solutions, generations):
 
         # Select parents
         parent = []
-        for i in range(0, 20):
-            chosen = selection_tournament(old_generation)
+        individuals = selection_tournament(old_generation, NUMBER_OF_PARENTS)
+        for chosen in individuals:
             parent.append(chosen)
 
         # Create offsprings
@@ -450,35 +434,46 @@ def generation(candidate_solutions, generations):
             min_fitness = old_generation[-1][1]
             max_fitness = old_generation[0][1]
 
-            crossover_1, crossover_2 = pmx_crossover(parent[i], parent[i + 1], min_fitness, max_fitness)
+            crossover_1, crossover_2, changed = pmx_crossover(parent[i], parent[i + 1], min_fitness, max_fitness)
 
-            offspring.append(crossover_1)
-            offspring.append(crossover_2)
+            new_fitness = crossover_1[1]
+            old_fitness = parent[i][1]
 
-        # Mutate whole population with probability. If mutated, add to pool
-        for i in range(0, len(old_generation)):
 
-            # Care fitness is inversed here
-            min_fitness = old_generation[-1][1]
-            max_fitness = old_generation[0][1]
+            if changed and new_fitness<=old_fitness + TOLERANCE:
+            # if changed:
+                offspring.append(crossover_1)
+                offspring.append(crossover_2)
 
-            mutated = mutation(old_generation[i], min_fitness, max_fitness)
-            # Only add offspring if the mutation improved fitness
-            old_fitness = old_generation[i][1]
-            new_fitness = mutated[1]
-            if new_fitness>=old_fitness:
-                offspring.append(mutated)
+        # Mutate whole population with probability. If improved fitness, add to pool
+        for i in range(0,2):
+            for i in range(0, len(old_generation)):
+
+                # Care fitness is inversed here
+                min_fitness = old_generation[-1][1]
+                max_fitness = old_generation[0][1]
+
+                mutated , changed = mutation(old_generation[i], min_fitness, max_fitness)
+
+                old_fitness = old_generation[i][1]
+                new_fitness = mutated[1]
+
+                if changed and new_fitness<=old_fitness + TOLERANCE:
+                # if changed:
+                    # Only add offspring if the mutation improved fitness
+                    offspring.append(mutated)
 
 
         # Add offsprings to global population
         for individual in offspring:
             insert_candidate(individual, old_generation)
-        # old_generation.sort(key=lambda x: x[1])
-
 
         # round_robin() returns a sorted list of the best performing indexes
         roundrobin = round_robin(old_generation)
 
+
+        # Keep the best individual (Elitism)
+        # new_generation.append(old_generation[0])
 
         # Create new population with best roundrobin results
         for i in range(0, POPULATION_SIZE):
@@ -517,6 +512,15 @@ def average_permutation_diversity(candidate_solutions):
             count += 1
     return total_distance / count if count > 0 else 0
 
+def check_duplicate(candidate_solution):
+    # Check if candidate contains repeating tiles
+    tile_ids = [tile[1] for tile in candidate_solution[0]]
+    if len(tile_ids) != len(set(tile_ids)):
+        print("Duplicates found:", [item for item in set(tile_ids) if tile_ids.count(item) > 1])
+
+        return True
+    else: return False
+
 
 def print_gui(candidate_solution_tuple):
     candidate_solution = candidate_solution_tuple[0]
@@ -531,7 +535,7 @@ def print_gui(candidate_solution_tuple):
     # Iterate through the candidate_solution and create labels for each tile
     for row in range(GRID):
         for col in range(GRID):
-            tile = candidate_solution[row * GRID + col]
+            tile = candidate_solution[row * GRID + col][0]
 
             # Create a label for each tile, displaying the edges in a square-like format
             label_text = f"  {tile[0]}  \n{tile[3]}   {tile[1]}\n  {tile[2]}  "
@@ -658,7 +662,8 @@ def main():
 
     candidate_solutions = generation(candidate_solutions, NUMBER_OF_GENERATIONS)
 
-    print(candidate_solutions[0][1])
+    print_fitness(candidate_solutions)
+
 
     if Enable_diversity:
         plot_diversity_curve()
